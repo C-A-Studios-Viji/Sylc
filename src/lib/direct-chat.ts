@@ -43,6 +43,19 @@ function rank(model: ProviderModel, coding: boolean): number {
   return score
 }
 
+function freeMedalionModel(row: Record<string, unknown>): boolean {
+  if (typeof row.id !== 'string') return false
+  if (row.id === 'openrouter/free') return true
+  const pricing = (row.pricing ?? {}) as Record<string, unknown>
+  const zeroPriced =
+    pricing.prompt != null &&
+    pricing.completion != null &&
+    Number(pricing.prompt) === 0 &&
+    Number(pricing.completion) === 0 &&
+    (pricing.request == null || Number(pricing.request) === 0)
+  return row.id.endsWith(':free') || zeroPriced
+}
+
 export async function loadAliases(provider: Provider, key: string): Promise<ModelAlias[]> {
   let response: Response
   try {
@@ -66,6 +79,7 @@ export async function loadAliases(provider: Provider, key: string): Promise<Mode
   const payload = (await response.json()) as { data?: Array<Record<string, unknown>> }
   const models: ProviderModel[] = (payload.data ?? []).flatMap((row) => {
     if (typeof row.id !== 'string' || row.archived === true) return []
+    if (provider === 'openrouter' && !freeMedalionModel(row)) return []
     const capabilities = (row.capabilities ?? {}) as Record<string, unknown>
     if (capabilities.completion_chat === false) return []
     const architecture = (row.architecture ?? {}) as Record<string, unknown>
@@ -87,6 +101,15 @@ export async function loadAliases(provider: Provider, key: string): Promise<Mode
   const byRank = [...models].sort(
     (a, b) => rank(b, provider === 'mistral') - rank(a, provider === 'mistral'),
   )
+  if (provider === 'openrouter') {
+    const routerIndex = byRank.findIndex((model) => model.id === 'openrouter/free')
+    if (routerIndex >= 0) byRank.push(...byRank.splice(routerIndex, 1))
+    else {
+      const router = { id: 'openrouter/free', name: 'Free routing', capabilities: [] }
+      byRank.push(router)
+      models.push(router)
+    }
+  }
   const catalogue: ModelCatalogue = {
     provider,
     models,
@@ -107,13 +130,25 @@ export async function sendDirectChat(
   messages: ChatTurn[],
   onText: (text: string) => void,
   signal: AbortSignal,
+  fallbackModelIds: string[] = [],
 ): Promise<string> {
   let response: Response
   try {
     response = await fetch(`${roots[provider]}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: modelId, messages, stream: true }),
+      body: JSON.stringify({
+        model: modelId,
+        ...(provider === 'openrouter'
+          ? {
+              models: [...new Set([...fallbackModelIds, 'openrouter/free'])].filter(
+                (id) => id !== modelId,
+              ),
+            }
+          : {}),
+        messages,
+        stream: true,
+      }),
       signal,
     })
   } catch (error) {
