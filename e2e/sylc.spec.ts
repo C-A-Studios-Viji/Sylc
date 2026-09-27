@@ -95,3 +95,36 @@ test('rejects an invalid Medalion key before storing it', async ({ page }) => {
   await expect(page.getByRole('alert')).toHaveText('Medalion rejected this key.')
   await expect(page.getByText('Connected')).toHaveCount(0)
 })
+
+test('Medalion retries the free router when a chosen free model disappears', async ({ page }) => {
+  let attempts = 0
+  await page.route('https://openrouter.ai/api/v1/key', (route) =>
+    route.fulfill({ json: { data: {} } }),
+  )
+  await page.route('https://openrouter.ai/api/v1/models', (route) =>
+    route.fulfill({ json: { data: [freeFlagship, secondModel] } }),
+  )
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async (route) => {
+    attempts++
+    const body = route.request().postDataJSON()
+    if (attempts === 1) {
+      expect(body.model).toBe('test/free-flagship:free')
+      return route.fulfill({ status: 404, json: { error: 'unavailable' } })
+    }
+    expect(body.model).toBe('openrouter/free')
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"choices":[{"delta":{"content":"Fallback works"}}]}\n\ndata: [DONE]\n\n',
+    })
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Models' }).first().click()
+  await page.getByRole('textbox', { name: 'Medalion key' }).fill('test-key')
+  await page.getByRole('button', { name: 'Connect' }).first().click()
+  await expect(page.getByText('Zen', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Chat' }).click()
+  await page.getByPlaceholder('Message Sylc…').fill('Hi')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText('Fallback works')).toBeVisible()
+  expect(attempts).toBe(2)
+})
