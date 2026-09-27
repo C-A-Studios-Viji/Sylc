@@ -46,6 +46,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/welcome" element={<WelcomeRoute />} />
+      <Route path="/restore" element={<WelcomeRoute />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:conversationId" element={<ChatPage />} />
