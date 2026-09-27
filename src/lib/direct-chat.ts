@@ -46,11 +46,20 @@ function rank(model: ProviderModel, coding: boolean): number {
 export async function loadAliases(provider: Provider, key: string): Promise<ModelAlias[]> {
   let response: Response
   try {
+    if (provider === 'openrouter') {
+      const validation = await fetch(`${roots[provider]}/key`, {
+        headers: { Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!validation.ok) throw errorFor(provider, validation.status)
+    }
     response = await fetch(`${roots[provider]}/models`, {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(20_000),
     })
-  } catch {
+  } catch (caught) {
+    if (caught instanceof Error && caught.name !== 'TypeError' && caught.name !== 'TimeoutError')
+      throw caught
     throw new Error(`${labels[provider]} could not be reached from this browser.`)
   }
   if (!response.ok) throw errorFor(provider, response.status)
