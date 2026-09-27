@@ -242,6 +242,14 @@ export async function sendDirectChat(
   let output = searchUnavailable
     ? 'I could not check live sources, so this answer may be out of date.\n\n'
     : ''
+  const sources = new Map<string, string>()
+  const finish = () => {
+    if (sources.size) {
+      output += `\n\nSources: ${[...sources].map(([url, title]) => `[${title}](${url})`).join(' · ')}`
+      onText(output)
+    }
+    return output
+  }
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -252,14 +260,27 @@ export async function sendDirectChat(
       for (const line of frame.split(/\r?\n/)) {
         if (!line.startsWith('data:')) continue
         const data = line.slice(5).trim()
-        if (data === '[DONE]') return output
+        if (data === '[DONE]') return finish()
         try {
           const event = JSON.parse(data) as {
-            choices?: Array<{ delta?: { content?: string | Array<{ text?: string }> } }>
+            choices?: Array<{
+              delta?: {
+                content?: string | Array<{ text?: string }>
+                annotations?: Array<{
+                  type?: string
+                  url_citation?: { url?: string; title?: string }
+                }>
+              }
+            }>
             error?: { message?: string }
           }
           if (event.error) throw new Error(event.error.message ?? 'Generation failed.')
           const content = event.choices?.[0]?.delta?.content
+          for (const annotation of event.choices?.[0]?.delta?.annotations ?? []) {
+            const citation = annotation.url_citation
+            if (annotation.type === 'url_citation' && citation?.url?.startsWith('https://'))
+              sources.set(citation.url, citation.title ?? citation.url)
+          }
           const text =
             typeof content === 'string'
               ? content
@@ -277,5 +298,5 @@ export async function sendDirectChat(
       }
     }
   }
-  return output
+  return finish()
 }
