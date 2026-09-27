@@ -26,6 +26,9 @@ const yiniSecond = {
 }
 
 test('keys live in Models, Zen is selected, and direct chat streams', async ({ page }) => {
+  await page.route('https://openrouter.ai/api/v1/key', (route) =>
+    route.fulfill({ json: { data: { label: 'test' } } }),
+  )
   await page.route('https://openrouter.ai/api/v1/models', (route) =>
     route.fulfill({ json: { data: [medalionModel, secondModel] } }),
   )
@@ -67,4 +70,16 @@ test('YiNi key selects Kami when entered alone and can be removed', async ({ pag
   await page.getByRole('button', { name: 'Models' }).first().click()
   await page.getByRole('button', { name: 'Remove key' }).click()
   await expect(page.getByText('Kami', { exact: true })).toHaveCount(0)
+})
+
+test('rejects an invalid Medalion key before storing it', async ({ page }) => {
+  await page.route('https://openrouter.ai/api/v1/key', (route) =>
+    route.fulfill({ status: 401, json: { error: 'invalid' } }),
+  )
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Models' }).first().click()
+  await page.getByRole('textbox', { name: 'Medalion key' }).fill('bad-key')
+  await page.getByRole('button', { name: 'Connect' }).first().click()
+  await expect(page.getByRole('alert')).toHaveText('Medalion rejected this key.')
+  await expect(page.getByText('Connected')).toHaveCount(0)
 })
