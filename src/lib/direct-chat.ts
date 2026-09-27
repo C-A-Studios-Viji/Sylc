@@ -123,6 +123,50 @@ export async function loadAliases(provider: Provider, key: string): Promise<Mode
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string }
 
+export function needsCurrentInfo(text: string): boolean {
+  return /\b(latest|today|yesterday|tomorrow|currently|current|right now|this week|last week|recent|news|weather|forecast|price|stock|score|election|schedule|release date|newest|up to date|knowledge cutoff|ceo|president|202[5-9])\b/i.test(
+    text,
+  )
+}
+
+async function searchWithYiNi(
+  key: string,
+  modelId: string,
+  messages: ChatTurn[],
+  signal: AbortSignal,
+): Promise<string> {
+  const response = await fetch(`${roots.mistral}/conversations`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: modelId, inputs: messages, tools: [{ type: 'web_search' }] }),
+    signal,
+  })
+  if (!response.ok) throw errorFor('mistral', response.status)
+  const payload = (await response.json()) as {
+    outputs?: Array<{
+      type?: string
+      content?: string | Array<{ type?: string; text?: string; title?: string; url?: string }>
+    }>
+  }
+  const text: string[] = []
+  const sources = new Map<string, string>()
+  for (const output of payload.outputs ?? []) {
+    if (output.type !== 'message.output') continue
+    if (typeof output.content === 'string') text.push(output.content)
+    else
+      for (const chunk of output.content ?? []) {
+        if (chunk.type === 'text' && chunk.text) text.push(chunk.text)
+        if (chunk.type === 'tool_reference' && chunk.url?.startsWith('https://'))
+          sources.set(chunk.url, chunk.title ?? chunk.url)
+      }
+  }
+  const answer = text.join('')
+  if (!answer) throw new Error('Search returned no answer.')
+  return sources.size
+    ? `${answer}\n\nSources: ${[...sources].map(([url, title]) => `[${title}](${url})`).join(' · ')}`
+    : answer
+}
+
 export async function sendDirectChat(
   provider: Provider,
   key: string,
@@ -135,17 +179,37 @@ export async function sendDirectChat(
   let response: Response
   const endpoint = `${roots[provider]}/chat/completions`
   const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
-  try {
-    response = await fetch(endpoint, {
+  const currentQuestion = needsCurrentInfo(messages.at(-1)?.content ?? '')
+  let searchUnavailable = false
+  if (provider === 'mistral' && currentQuestion) {
+    try {
+      const answer = await searchWithYiNi(key, modelId, messages, signal)
+      onText(answer)
+      return answer
+    } catch (caught) {
+      if (signal.aborted) throw caught
+      searchUnavailable = true
+    }
+  }
+  const request = (model: string, search: boolean) =>
+    fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: modelId,
-        ...(provider === 'openrouter'
+        model,
+        ...(provider === 'openrouter' && model !== 'openrouter/free'
           ? {
               models: [...new Set([...fallbackModelIds, 'openrouter/free'])].filter(
-                (id) => id !== modelId,
+                (id) => id !== model,
               ),
+            }
+          : {}),
+        ...(search
+          ? {
+              tools: [
+                { type: 'openrouter:web_search', parameters: { max_uses: 1, max_results: 3 } },
+              ],
+              max_tool_calls: 1,
             }
           : {}),
         messages,
@@ -153,17 +217,18 @@ export async function sendDirectChat(
       }),
       signal,
     })
+  try {
+    response = await request(modelId, provider === 'openrouter' && currentQuestion)
+    if (provider === 'openrouter' && currentQuestion && !response.ok && response.status !== 401) {
+      searchUnavailable = true
+      response = await request(modelId, false)
+    }
     if (
       provider === 'openrouter' &&
       modelId !== 'openrouter/free' &&
       [404, 429, 502, 503].includes(response.status)
     ) {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ model: 'openrouter/free', messages, stream: true }),
-        signal,
-      })
+      response = await request('openrouter/free', false)
     }
   } catch (error) {
     if (signal.aborted) throw error
@@ -174,7 +239,9 @@ export async function sendDirectChat(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  let output = ''
+  let output = searchUnavailable
+    ? 'I could not check live sources, so this answer may be out of date.\n\n'
+    : ''
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
