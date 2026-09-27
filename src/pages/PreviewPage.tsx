@@ -122,6 +122,7 @@ export function PreviewPage() {
         messages,
         setStreamed,
         controller.signal,
+        (aliases[current.provider] ?? []).map((alias) => alias.modelId),
       )
       if (answer)
         setConversations((items) =>
