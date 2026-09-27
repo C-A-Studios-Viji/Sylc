@@ -19,7 +19,7 @@ export function aliasesFor(provider: Provider, catalogue?: ModelCatalogue): Mode
     provider === 'openrouter' ? (['Zen', 'Strato'] as const) : (['Kami', 'Zex'] as const)
   const subtitles =
     provider === 'openrouter'
-      ? ['Best overall', 'Second choice']
+      ? ['Best free choice', 'Second free choice']
       : ['Best for coding', 'Second coding choice']
   const preferred = provider === 'openrouter' ? 'best_overall' : 'best_coding'
   const available = new Set(catalogue.models.map((model) => model.id))
