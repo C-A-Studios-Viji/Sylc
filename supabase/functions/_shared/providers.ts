@@ -46,7 +46,7 @@ function providerUrl(provider: Provider, path: string): string {
 }
 
 async function toProviderError(provider: Provider, response: Response): Promise<ProviderError> {
-  const label = provider === 'openrouter' ? 'OpenRouter' : 'Mistral'
+  const label = provider === 'openrouter' ? 'Medalion' : 'YiNi'
   if (response.status === 401 || response.status === 403)
     return new ProviderError(
       response.status,
