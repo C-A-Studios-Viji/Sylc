@@ -1,0 +1,13 @@
+project_id = "sylc"
+
+[functions.profile]
+verify_jwt = false
+
+[functions.providers]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false
+
+[functions.conversations]
+verify_jwt = false
