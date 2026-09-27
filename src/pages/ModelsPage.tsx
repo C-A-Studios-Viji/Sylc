@@ -13,9 +13,10 @@ export function ModelsPage() {
   const { profile, replaceProfile } = useProfile()
   const navigate = useNavigate()
   const [provider, setProvider] = useState<Provider>(
-    profile?.preferences.selectedProvider ??
-      profile?.providers.find((item) => item.connected)?.provider ??
-      'openrouter',
+    profile?.providers.find((item) => item.provider === profile.preferences.selectedProvider)
+      ?.connected
+      ? profile.preferences.selectedProvider
+      : (profile?.providers.find((item) => item.connected)?.provider ?? 'openrouter'),
   )
   const [error, setError] = useState('')
   const connected =
