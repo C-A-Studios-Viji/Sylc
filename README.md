@@ -13,6 +13,8 @@ Keys are kept in the browser tab's session storage and sent directly to the sele
 
 Model aliases come from the connected account's live model catalogue. The ranking is a heuristic based on model name, context length, and recency; availability and ordering can change. Actual API usage may incur charges under your AI account.
 
+Questions about recent or changing information use the connected service's web search when available. Search may consume paid credits even when the selected model is free. If search fails, Sylc answers from the model's existing knowledge with a freshness notice. A static site cannot secretly scrape Google results or use a ChatGPT account without another integration.
+
 ## Develop
 
 ```bash
