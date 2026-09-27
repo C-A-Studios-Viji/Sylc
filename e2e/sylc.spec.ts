@@ -1,16 +1,25 @@
 import { expect, test } from '@playwright/test'
 
 const medalionModel = {
-  id: 'test/flagship',
-  name: 'Flagship Pro',
+  id: 'test/paid-flagship',
+  name: 'Paid Flagship Pro',
   context_length: 128000,
   created: 1780000000,
+  pricing: { prompt: '0.00001', completion: '0.00002' },
 }
 const secondModel = {
-  id: 'test/second',
-  name: 'Second Model',
+  id: 'test/free-second:free',
+  name: 'Second Free Model',
   context_length: 32000,
   created: 1770000000,
+  pricing: { prompt: '0', completion: '0' },
+}
+const freeFlagship = {
+  id: 'test/free-flagship:free',
+  name: 'Free Flagship Pro',
+  context_length: 128000,
+  created: 1780000000,
+  pricing: { prompt: '0', completion: '0' },
 }
 const yiniModel = {
   id: 'devstral-test',
@@ -30,11 +39,14 @@ test('keys live in Models, Zen is selected, and direct chat streams', async ({ p
     route.fulfill({ json: { data: { label: 'test' } } }),
   )
   await page.route('https://openrouter.ai/api/v1/models', (route) =>
-    route.fulfill({ json: { data: [medalionModel, secondModel] } }),
+    route.fulfill({ json: { data: [medalionModel, freeFlagship, secondModel] } }),
   )
   await page.route('https://openrouter.ai/api/v1/chat/completions', async (route) => {
     const body = route.request().postDataJSON()
-    expect(body.model).toBe('test/flagship')
+    expect(body.model).toBe('test/free-flagship:free')
+    expect(body.models).toContain('test/free-second:free')
+    expect(body.models).toContain('openrouter/free')
+    expect(body.models).not.toContain('test/paid-flagship')
     expect(route.request().headers().authorization).toBe('Bearer test-key')
     await route.fulfill({
       contentType: 'text/event-stream',
