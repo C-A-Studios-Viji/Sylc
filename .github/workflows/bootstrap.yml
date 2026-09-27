@@ -1,0 +1,45 @@
+name: Bootstrap Sylc
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild source archive
+        shell: bash
+        run: |
+          cat .bootstrap/part* | base64 --decode > /tmp/sylc.tgz
+          mkdir -p /tmp/sylc-src
+          tar -xzf /tmp/sylc.tgz -C /tmp/sylc-src
+
+      - name: Publish Sylc source
+        shell: bash
+        run: |
+          git config user.name "Sylc Builder"
+          git config user.email "actions@users.noreply.github.com"
+
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml .github/workflows/static.yml
+          cp -a /tmp/sylc-src/. .
+
+          git add -A .bootstrap .github/workflows/bootstrap.yml .github/workflows/static.yml
+          git add .gitignore .env.example .prettierrc.json package.json tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts vitest.config.ts eslint.config.js supabase
+          git commit -m "feat: add secure Supabase backend and vault"
+
+          git add index.html src
+          git commit -m "feat: build Sylc chat experience"
+
+          git add README.md docs tests e2e playwright.config.ts .github/workflows/ci.yml
+          git commit -m "test: add CI, security coverage, and documentation"
+
+          git push origin HEAD:main
