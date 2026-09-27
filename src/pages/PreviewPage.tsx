@@ -12,7 +12,7 @@ import {
 import { useState } from 'react'
 
 type Section = 'chat' | 'models' | 'connections'
-type Provider = 'OpenRouter' | 'Mistral'
+type Provider = 'Medalion' | 'YiNi'
 
 const sections = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
@@ -24,7 +24,7 @@ const setupUrl = 'https://github.com/C-A-Studios-Viji/Sylc#hosted-supabase-deplo
 
 export function PreviewPage() {
   const [section, setSection] = useState<Section>('chat')
-  const [provider, setProvider] = useState<Provider>('OpenRouter')
+  const [provider, setProvider] = useState<Provider>('Medalion')
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
@@ -35,7 +35,7 @@ export function PreviewPage() {
           </span>
           <div>
             <div className="text-base font-semibold tracking-tight">Sylc</div>
-            <div className="text-[11px] text-sylc-muted">multi-provider AI</div>
+            <div className="text-[11px] text-sylc-muted">your AI workspace</div>
           </div>
           <span className="ml-auto rounded-full bg-sylc-twilight/45 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 md:hidden">
             Preview
@@ -77,7 +77,7 @@ export function PreviewPage() {
               ? 'New conversation'
               : section === 'models'
                 ? 'Model browser'
-                : 'Provider connections'}
+                : 'Connections'}
           </div>
           <span className="rounded-full border border-sylc-line bg-sylc-panel px-2.5 py-1 text-[11px] font-medium text-slate-600">
             Preview mode
@@ -96,8 +96,8 @@ export function PreviewPage() {
                 onChange={(event) => setProvider(event.target.value as Provider)}
                 className="h-9 rounded-[7px] border border-sylc-line bg-white px-3 text-xs font-medium"
               >
-                <option>OpenRouter</option>
-                <option>Mistral</option>
+                <option>Medalion</option>
+                <option>YiNi</option>
               </select>
               <span className="flex h-9 min-w-48 items-center rounded-[7px] border border-sylc-line bg-slate-50 px-3 text-xs text-sylc-muted">
                 Connect {provider} to load models
@@ -116,15 +116,14 @@ export function PreviewPage() {
                   What are we working on?
                 </h1>
                 <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-sylc-muted">
-                  One conversation, your choice of provider. Switch models without losing the
-                  thread.
+                  One conversation, your choice of model. Switch models without losing the thread.
                 </p>
                 <div className="mt-8 grid gap-3 text-left sm:grid-cols-2">
                   <div className="rounded-[10px] border border-sylc-line bg-white/80 p-4 shadow-sm">
                     <Boxes size={18} className="text-sylc-twilight-deep" />
-                    <div className="mt-3 text-sm font-semibold">Two providers, one space</div>
+                    <div className="mt-3 text-sm font-semibold">Four models, one space</div>
                     <p className="mt-1 text-xs leading-5 text-sylc-muted">
-                      Connect OpenRouter and Mistral, then choose from their live model catalogues.
+                      Zen and Strato lead Medalion. Kami and Zex are ready for coding in YiNi.
                     </p>
                   </div>
                   <div className="rounded-[10px] border border-sylc-line bg-white/80 p-4 shadow-sm">
@@ -161,11 +160,11 @@ export function PreviewPage() {
             </div>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Find your model</h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-sylc-muted">
-              Sylc loads available models from your connected provider. The catalogue appears here
-              after setup.
+              Sylc loads available models from your connected tier. The catalogue appears here after
+              setup.
             </p>
             <div className="mt-7 grid gap-3 sm:grid-cols-2">
-              {(['OpenRouter', 'Mistral'] as const).map((name) => (
+              {(['Medalion', 'YiNi'] as const).map((name) => (
                 <button
                   key={name}
                   type="button"
@@ -178,7 +177,7 @@ export function PreviewPage() {
                   <span>
                     <span className="block text-sm font-semibold">{name}</span>
                     <span className="mt-1 block text-xs text-sylc-muted">
-                      Catalogue available after connection
+                      {name === 'Medalion' ? 'Zen · Strato' : 'Kami · Zex'}
                     </span>
                   </span>
                   <ArrowRight size={17} className="text-sylc-muted" />
@@ -201,13 +200,26 @@ export function PreviewPage() {
                 <LockKeyhole size={19} className="text-sylc-twilight-deep" />
                 <h2 className="mt-3 text-sm font-semibold">Profile vault</h2>
                 <p className="mt-1 text-xs leading-5 text-sylc-muted">
-                  Your recovery code and provider credentials are handled by the backend, not stored
-                  in this preview.
+                  Your recovery code and connections are handled by the backend, not stored in this
+                  preview.
                 </p>
               </div>
               <div className="rounded-[10px] border border-sylc-line bg-white p-5 shadow-sm">
                 <KeyRound size={19} className="text-sylc-gold" />
-                <h2 className="mt-3 text-sm font-semibold">Provider keys</h2>
+                <h2 className="mt-3 text-sm font-semibold">Your keys</h2>
+                <div className="mt-3 space-y-2">
+                  {(['Medalion', 'YiNi'] as const).map((tier) => (
+                    <label key={tier} className="block text-xs font-medium">
+                      {tier} key
+                      <input
+                        type="password"
+                        disabled
+                        placeholder="Available after secure setup"
+                        className="mt-1 block h-9 w-full rounded border border-sylc-line bg-slate-50 px-3"
+                      />
+                    </label>
+                  ))}
+                </div>
                 <p className="mt-1 text-xs leading-5 text-sylc-muted">
                   Key entry becomes available only after the secure vault is deployed.
                 </p>
