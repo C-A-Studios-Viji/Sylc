@@ -5,8 +5,10 @@ import type { SylcProfile } from '../types/api'
 
 interface ProfileContextValue {
   profile: SylcProfile | null
+  pendingAccessCode: string | null
   loading: boolean
   setAuthenticatedProfile: (profile: SylcProfile, token: string) => void
+  setPendingAccessCode: (code: string | null) => void
   replaceProfile: (profile: SylcProfile) => void
   signOutLocal: () => void
   refreshProfile: () => Promise<void>
@@ -16,10 +18,12 @@ const ProfileContext = createContext<ProfileContextValue | null>(null)
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<SylcProfile | null>(null)
+  const [pendingAccessCode, setPendingAccessCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(loadSession()))
 
   const signOutLocal = useCallback(() => {
     clearSession()
+    setPendingAccessCode(null)
     setProfile(null)
     setLoading(false)
   }, [])
@@ -47,7 +51,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ProfileContextValue>(
     () => ({
       profile,
+      pendingAccessCode,
       loading,
+      setPendingAccessCode,
       setAuthenticatedProfile(nextProfile, token) {
         saveSession({ token, profileId: nextProfile.id })
         setProfile(nextProfile)
@@ -57,7 +63,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       signOutLocal,
       refreshProfile,
     }),
-    [profile, loading, signOutLocal, refreshProfile],
+    [profile, pendingAccessCode, loading, signOutLocal, refreshProfile],
   )
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>
