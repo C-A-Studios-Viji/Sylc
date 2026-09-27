@@ -128,3 +128,101 @@ test('Medalion retries the free router when a chosen free model disappears', asy
   await expect(page.getByText('Fallback works')).toBeVisible()
   expect(attempts).toBe(2)
 })
+
+test('a current question searches and keeps the answer in chat', async ({ page }) => {
+  await page.route('https://openrouter.ai/api/v1/key', (route) =>
+    route.fulfill({ json: { data: {} } }),
+  )
+  await page.route('https://openrouter.ai/api/v1/models', (route) =>
+    route.fulfill({ json: { data: [freeFlagship, secondModel] } }),
+  )
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async (route) => {
+    const body = route.request().postDataJSON()
+    expect(body.tools).toEqual([
+      { type: 'openrouter:web_search', parameters: { max_uses: 1, max_results: 3 } },
+    ])
+    await route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"choices":[{"delta":{"content":"Recent answer with sources."}}]}\n\ndata: [DONE]\n\n',
+    })
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Models' }).first().click()
+  await page.getByRole('textbox', { name: 'Medalion key' }).fill('test-key')
+  await page.getByRole('button', { name: 'Connect' }).first().click()
+  await expect(page.getByText('Zen', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Chat' }).click()
+  await page.getByPlaceholder('Message Sylc…').fill('What is the latest news today?')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText('Recent answer with sources.')).toBeVisible()
+})
+
+test('search failure falls back to a normal answer with a freshness notice', async ({ page }) => {
+  await page.route('https://openrouter.ai/api/v1/key', (route) =>
+    route.fulfill({ json: { data: {} } }),
+  )
+  await page.route('https://openrouter.ai/api/v1/models', (route) =>
+    route.fulfill({ json: { data: [freeFlagship, secondModel] } }),
+  )
+  let requests = 0
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async (route) => {
+    requests++
+    const body = route.request().postDataJSON()
+    if (requests === 1) {
+      expect(body.tools).toBeDefined()
+      return route.fulfill({ status: 402, json: { error: 'search needs credits' } })
+    }
+    expect(body.tools).toBeUndefined()
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"choices":[{"delta":{"content":"Best known answer."}}]}\n\ndata: [DONE]\n\n',
+    })
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Models' }).first().click()
+  await page.getByRole('textbox', { name: 'Medalion key' }).fill('test-key')
+  await page.getByRole('button', { name: 'Connect' }).first().click()
+  await expect(page.getByText('Zen', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Chat' }).click()
+  await page.getByPlaceholder('Message Sylc…').fill('What is the current score?')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText(/could not check live sources/)).toBeVisible()
+  await expect(page.getByText(/Best known answer/)).toBeVisible()
+  expect(requests).toBe(2)
+})
+
+test('YiNi searches recent questions through conversations', async ({ page }) => {
+  await page.route('https://api.mistral.ai/v1/models', (route) =>
+    route.fulfill({ json: { data: [yiniModel] } }),
+  )
+  await page.route('https://api.mistral.ai/v1/conversations', async (route) => {
+    const body = route.request().postDataJSON()
+    expect(body.tools).toEqual([{ type: 'web_search' }])
+    await route.fulfill({
+      json: {
+        outputs: [
+          {
+            type: 'message.output',
+            content: [
+              { type: 'text', text: 'Fresh answer.' },
+              { type: 'tool_reference', title: 'Source', url: 'https://example.com/source' },
+            ],
+          },
+        ],
+      },
+    })
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Models' }).first().click()
+  await page.getByRole('textbox', { name: 'YiNi key' }).fill('test-key')
+  await page.getByRole('button', { name: 'Connect' }).nth(1).click()
+  await expect(page.getByText('Kami', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Chat' }).click()
+  await page.getByPlaceholder('Message Sylc…').fill('What is the latest release?')
+  await page.getByRole('button', { name: 'Send message' }).click()
+  await expect(page.getByText('Fresh answer.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Source' })).toHaveAttribute(
+    'href',
+    'https://example.com/source',
+  )
+})
