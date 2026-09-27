@@ -143,7 +143,7 @@ test('a current question searches and keeps the answer in chat', async ({ page }
     ])
     await route.fulfill({
       contentType: 'text/event-stream',
-      body: 'data: {"choices":[{"delta":{"content":"Recent answer with sources."}}]}\n\ndata: [DONE]\n\n',
+      body: 'data: {"choices":[{"delta":{"content":"Recent answer with sources.","annotations":[{"type":"url_citation","url_citation":{"url":"https://example.com/latest","title":"Latest source"}}]}}]}\n\ndata: [DONE]\n\n',
     })
   })
   await page.goto('/')
@@ -155,6 +155,10 @@ test('a current question searches and keeps the answer in chat', async ({ page }
   await page.getByPlaceholder('Message Sylc…').fill('What is the latest news today?')
   await page.getByRole('button', { name: 'Send message' }).click()
   await expect(page.getByText('Recent answer with sources.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Latest source' })).toHaveAttribute(
+    'href',
+    'https://example.com/latest',
+  )
 })
 
 test('search failure falls back to a normal answer with a freshness notice', async ({ page }) => {
