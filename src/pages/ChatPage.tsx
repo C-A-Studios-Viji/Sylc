@@ -89,9 +89,10 @@ export function ChatPage() {
   const queryClient = useQueryClient()
   const { profile, replaceProfile } = useProfile()
   const [provider, setProvider] = useState<Provider>(
-    profile?.preferences.selectedProvider ??
-      profile?.providers.find((item) => item.connected)?.provider ??
-      'openrouter',
+    profile?.providers.find((item) => item.provider === profile.preferences.selectedProvider)
+      ?.connected
+      ? profile.preferences.selectedProvider
+      : (profile?.providers.find((item) => item.connected)?.provider ?? 'openrouter'),
   )
   const [modelId, setModelId] = useState('')
   const [input, setInput] = useState('')
