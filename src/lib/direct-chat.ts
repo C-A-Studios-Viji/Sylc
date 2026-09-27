@@ -133,10 +133,12 @@ export async function sendDirectChat(
   fallbackModelIds: string[] = [],
 ): Promise<string> {
   let response: Response
+  const endpoint = `${roots[provider]}/chat/completions`
+  const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
   try {
-    response = await fetch(`${roots[provider]}/chat/completions`, {
+    response = await fetch(endpoint, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         model: modelId,
         ...(provider === 'openrouter'
@@ -151,6 +153,18 @@ export async function sendDirectChat(
       }),
       signal,
     })
+    if (
+      provider === 'openrouter' &&
+      modelId !== 'openrouter/free' &&
+      [404, 429, 502, 503].includes(response.status)
+    ) {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model: 'openrouter/free', messages, stream: true }),
+        signal,
+      })
+    }
   } catch (error) {
     if (signal.aborted) throw error
     throw new Error(`${labels[provider]} could not be reached from this browser.`)
