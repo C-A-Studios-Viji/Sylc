@@ -17,6 +17,7 @@ import {
   updatePreferences,
 } from '../lib/api'
 import { useProfile } from '../lib/profile-context'
+import { aliasesFor, tierName } from '../lib/model-aliases'
 import type { Message, Provider } from '../types/api'
 
 function MessageBubble({
@@ -88,7 +89,9 @@ export function ChatPage() {
   const queryClient = useQueryClient()
   const { profile, replaceProfile } = useProfile()
   const [provider, setProvider] = useState<Provider>(
-    profile?.preferences.selectedProvider ?? 'openrouter',
+    profile?.preferences.selectedProvider ??
+      profile?.providers.find((item) => item.connected)?.provider ??
+      'openrouter',
   )
   const [modelId, setModelId] = useState('')
   const [input, setInput] = useState('')
@@ -128,20 +131,21 @@ export function ChatPage() {
     enabled: Boolean(connected.get(provider)),
     staleTime: 5 * 60_000,
   })
+  const aliases = useMemo(
+    () => aliasesFor(provider, modelsQuery.data),
+    [provider, modelsQuery.data],
+  )
 
   useEffect(() => {
     const preference =
       provider === 'openrouter'
         ? profile?.preferences.selectedModelOpenrouter
         : profile?.preferences.selectedModelMistral
-    if (preference) {
-      setModelId(preference)
-      return
-    }
-    const featured = modelsQuery.data?.featured['best_overall']?.[0]
-    const first = modelsQuery.data?.models[0]?.id
-    if (!modelId && (featured || first)) setModelId(featured ?? first ?? '')
-  }, [modelsQuery.data, profile, provider, modelId])
+    if (!aliases.length) return
+    const next =
+      aliases.find((alias) => alias.modelId === preference)?.modelId ?? aliases[0]?.modelId ?? ''
+    if (modelId !== next && !aliases.some((alias) => alias.modelId === modelId)) setModelId(next)
+  }, [aliases, profile, provider, modelId])
 
   useEffect(() => {
     stickToBottomRef.current = true
@@ -173,7 +177,7 @@ export function ChatPage() {
     const text = options.message.trim()
     if (!text && options.mode !== 'regenerate') return
     if (!connected.get(provider)) {
-      setError(`Connect ${provider === 'openrouter' ? 'OpenRouter' : 'Mistral'} before chatting.`)
+      setError(`Connect ${tierName[provider]} before chatting.`)
       return
     }
     if (!modelId) {
@@ -314,8 +318,8 @@ export function ChatPage() {
               }}
               className="h-8 rounded-[7px] border border-sylc-line bg-white px-2 text-xs font-medium"
             >
-              <option value="openrouter">OpenRouter</option>
-              <option value="mistral">Mistral</option>
+              <option value="openrouter">Medalion</option>
+              <option value="mistral">YiNi</option>
             </select>
             <select
               value={modelId}
@@ -328,9 +332,9 @@ export function ChatPage() {
               className="h-8 min-w-0 max-w-[420px] flex-1 rounded-[7px] border border-sylc-line bg-white px-2 text-xs disabled:bg-slate-50"
             >
               <option value="">{modelsQuery.isLoading ? 'Loading models…' : 'Select model'}</option>
-              {modelsQuery.data?.models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name || model.id}
+              {aliases.map((alias) => (
+                <option key={alias.modelId} value={alias.modelId}>
+                  {alias.name}
                 </option>
               ))}
             </select>
@@ -425,8 +429,8 @@ export function ChatPage() {
                   What are we working on?
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-sylc-muted">
-                  Pick a connected provider and model above. You can switch either one
-                  mid-conversation without losing the thread.
+                  Pick a connected tier and model above. You can switch either one mid-conversation
+                  without losing the thread.
                 </p>
               </div>
             )}
@@ -506,8 +510,8 @@ export function ChatPage() {
             </div>
             <div className="mt-1.5 flex items-center justify-between px-1 text-[10px] text-sylc-muted">
               <span>
-                {provider === 'openrouter' ? 'OpenRouter' : 'Mistral'} ·{' '}
-                {modelId || 'no model selected'}
+                {tierName[provider]} ·{' '}
+                {aliases.find((alias) => alias.modelId === modelId)?.name ?? 'select a model'}
               </span>
               <span>Keys stay server-side</span>
             </div>
