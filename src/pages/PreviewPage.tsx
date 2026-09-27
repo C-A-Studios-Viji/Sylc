@@ -314,7 +314,8 @@ export function PreviewPage() {
             </div>
             <p className="mt-5 text-xs leading-5 text-sylc-muted">
               Keys remain in this browser tab and are sent directly to the selected service. Closing
-              the tab clears them. Keep this device private.
+              the tab clears them. Current questions can use metered web search on your key; if
+              search fails, Sylc answers with a freshness notice.
             </p>
           </div>
         ) : (
