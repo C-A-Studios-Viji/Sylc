@@ -4,6 +4,7 @@ import { Notice } from '../components/Notice'
 import { SettingsTabs } from '../components/SettingsTabs'
 import { removeProviderKey, saveProviderKey, testProviderKey } from '../lib/api'
 import { useProfile } from '../lib/profile-context'
+import { tierName } from '../lib/model-aliases'
 import type { Provider } from '../types/api'
 
 function ProviderCard({ provider }: { provider: Provider }) {
@@ -13,7 +14,7 @@ function ProviderCard({ provider }: { provider: Provider }) {
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
-  const label = provider === 'openrouter' ? 'OpenRouter' : 'Mistral'
+  const label = tierName[provider]
 
   async function test() {
     if (!key.trim()) return
