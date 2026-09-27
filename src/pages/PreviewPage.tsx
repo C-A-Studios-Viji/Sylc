@@ -12,7 +12,16 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { MarkdownMessage } from '../components/MarkdownMessage'
-import { loadAliases, readKeys, saveKey, sendDirectChat, type ChatTurn } from '../lib/direct-chat'
+import {
+  loadAliases,
+  readKeys,
+  readLiveInfoKey,
+  saveKey,
+  saveLiveInfoKey,
+  sendVerifiedLiveChat,
+  type ChatTurn,
+  validateLiveInfoKey,
+} from '../lib/direct-chat'
 import { tierName, type ModelAlias } from '../lib/model-aliases'
 import type { Provider } from '../types/api'
 
@@ -23,6 +32,10 @@ const providers: Provider[] = ['openrouter', 'mistral']
 export function PreviewPage() {
   const [section, setSection] = useState<Section>('chat')
   const [keys, setKeys] = useState(readKeys)
+  const [liveInfoKey, setLiveInfoKey] = useState(readLiveInfoKey)
+  const [liveInfoDraft, setLiveInfoDraft] = useState('')
+  const [liveInfoVisible, setLiveInfoVisible] = useState(false)
+  const [checkingLiveInfo, setCheckingLiveInfo] = useState(false)
   const [drafts, setDrafts] = useState<Partial<Record<Provider, string>>>({})
   const [visible, setVisible] = useState<Partial<Record<Provider, boolean>>>({})
   const [aliases, setAliases] = useState<Partial<Record<Provider, ModelAlias[]>>>({})
@@ -91,9 +104,36 @@ export function PreviewPage() {
     if (current?.provider === provider) setSelected('')
   }
 
+  async function connectLiveInfo() {
+    const key = liveInfoDraft.trim()
+    if (!key) return
+    setCheckingLiveInfo(true)
+    setError('')
+    try {
+      await validateLiveInfoKey(key)
+      saveLiveInfoKey(key)
+      setLiveInfoKey(key)
+      setLiveInfoDraft('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not connect Live info.')
+    } finally {
+      setCheckingLiveInfo(false)
+    }
+  }
+
+  function disconnectLiveInfo() {
+    saveLiveInfoKey('')
+    setLiveInfoKey('')
+  }
+
   async function submit() {
     const text = input.trim()
     if (!text || busy) return
+    if (!liveInfoKey) {
+      setSection('models')
+      setError('Add your Live info key before chatting.')
+      return
+    }
     if (!current || !keys[current.provider]) {
       setSection('models')
       setError('Paste a key to start chatting.')
@@ -115,14 +155,11 @@ export function PreviewPage() {
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      const answer = await sendDirectChat(
-        current.provider,
-        keys[current.provider]!,
-        current.modelId,
+      const answer = await sendVerifiedLiveChat(
+        liveInfoKey,
         messages,
         setStreamed,
         controller.signal,
-        (aliases[current.provider] ?? []).map((alias) => alias.modelId),
       )
       if (answer)
         setConversations((items) =>
@@ -218,7 +255,7 @@ export function PreviewPage() {
           <div className="mx-auto w-full max-w-4xl overflow-y-auto px-5 py-8">
             <h1 className="text-3xl font-semibold tracking-tight">Your models</h1>
             <p className="mt-2 text-sm text-sylc-muted">
-              Paste a key for either tier. Sylc picks the first model automatically.
+              Add Live info, then paste a key for either tier. Sylc picks the first model automatically.
             </p>
             {error && (
               <p
@@ -229,6 +266,59 @@ export function PreviewPage() {
               </p>
             )}
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <section className="rounded-[10px] border border-sylc-sky-strong bg-white p-5 shadow-sm sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Live info</h2>
+                  <span className="text-xs text-sylc-muted">
+                    {liveInfoKey ? 'Connected' : 'Required'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-sylc-muted">
+                  Required for every reply. Sylc checks current web sources before it answers.
+                </p>
+                <label className="mt-4 block text-xs font-medium" htmlFor="live-info-key">
+                  Live info key
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <input
+                      id="live-info-key"
+                      type={liveInfoVisible ? 'text' : 'password'}
+                      value={liveInfoDraft}
+                      onChange={(event) => setLiveInfoDraft(event.target.value)}
+                      placeholder={liveInfoKey ? 'Paste a replacement key' : 'Paste your key'}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="h-10 w-full rounded border border-sylc-line px-3 pr-9 text-sm focus:border-sylc-sky-strong focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Show Live info key"
+                      onClick={() => setLiveInfoVisible((value) => !value)}
+                      className="absolute right-2 top-2.5 text-slate-500"
+                    >
+                      {liveInfoVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!liveInfoDraft.trim() || checkingLiveInfo}
+                    onClick={() => void connectLiveInfo()}
+                    className="rounded bg-sylc-sky-strong px-3 text-xs font-semibold disabled:opacity-40"
+                  >
+                    {checkingLiveInfo ? 'Checking…' : 'Connect'}
+                  </button>
+                </div>
+                {liveInfoKey && (
+                  <button
+                    type="button"
+                    onClick={disconnectLiveInfo}
+                    className="mt-3 flex items-center gap-1 text-xs text-slate-500 hover:text-red-700"
+                  >
+                    <Trash2 size={13} /> Remove key
+                  </button>
+                )}
+              </section>
               {providers.map((provider) => (
                 <section
                   key={provider}
@@ -313,9 +403,9 @@ export function PreviewPage() {
               ))}
             </div>
             <p className="mt-5 text-xs leading-5 text-sylc-muted">
-              Keys remain in this browser tab and are sent directly to the selected service. Closing
-              the tab clears them. Current questions can use metered web search on your key; if
-              search fails, Sylc answers with a freshness notice.
+              Keys remain in this browser tab and are sent directly to their service. Closing the
+              tab clears them. Live info is required: Sylc does not send a chat reply unless it
+              can check current web sources first.
             </p>
           </div>
         ) : (
@@ -355,7 +445,9 @@ export function PreviewPage() {
                     <h1 className="mt-6 text-3xl font-semibold">What are we working on?</h1>
                     <p className="mt-3 text-sm text-sylc-muted">
                       {current
-                        ? `${current.name} is ready.`
+                        ? liveInfoKey
+                          ? `${current.name} is ready with Live info.`
+                          : 'Open Models to add the required Live info key.'
                         : 'Open Models to paste a key and start chatting.'}
                     </p>
                   </div>
@@ -421,7 +513,7 @@ export function PreviewPage() {
                     type="button"
                     onClick={() => void submit()}
                     aria-label="Send message"
-                    disabled={!input.trim()}
+                    disabled={!input.trim() || !current || !liveInfoKey}
                     className="rounded bg-sylc-sky-strong p-2 disabled:opacity-40"
                   >
                     <Send size={16} />
