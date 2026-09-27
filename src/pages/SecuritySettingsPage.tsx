@@ -7,7 +7,8 @@ import { deleteProfile, regenerateAccessCode, renameProfile } from '../lib/api'
 import { useProfile } from '../lib/profile-context'
 
 export function SecuritySettingsPage() {
-  const { profile, replaceProfile, signOutLocal } = useProfile()
+  const { profile, replaceProfile, signOutLocal, pendingAccessCode, setPendingAccessCode } =
+    useProfile()
   const [name, setName] = useState(profile?.displayName ?? '')
   const [newCode, setNewCode] = useState<string | null>(null)
   const [deleteText, setDeleteText] = useState('')
@@ -59,12 +60,18 @@ export function SecuritySettingsPage() {
     }
   }
 
-  if (newCode) {
+  if (newCode || pendingAccessCode) {
     return (
       <main className="mx-auto max-w-lg px-4 py-8">
         <div className="rounded-[8px] border border-sylc-line bg-white p-5 sylc-shadow">
           <div className="mb-4 text-sm font-semibold">New access code</div>
-          <AccessCodePanel accessCode={newCode} onContinue={() => setNewCode(null)} />
+          <AccessCodePanel
+            accessCode={newCode ?? pendingAccessCode!}
+            onContinue={() => {
+              setNewCode(null)
+              setPendingAccessCode(null)
+            }}
+          />
         </div>
       </main>
     )
