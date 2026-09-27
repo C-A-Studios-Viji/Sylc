@@ -7,6 +7,8 @@ const roots: Record<Provider, string> = {
 }
 const labels: Record<Provider, string> = { openrouter: 'Medalion', mistral: 'YiNi' }
 const storageKey = 'sylc-tab-keys'
+const liveInfoStorageKey = 'sylc-live-info-key'
+const liveInfoRoot = 'https://api.groq.com/openai/v1'
 
 export function readKeys(): Partial<Record<Provider, string>> {
   try {
@@ -23,6 +25,96 @@ export function saveKey(provider: Provider, key: string) {
   if (key) keys[provider] = key
   else delete keys[provider]
   sessionStorage.setItem(storageKey, JSON.stringify(keys))
+}
+
+export function readLiveInfoKey(): string {
+  return sessionStorage.getItem(liveInfoStorageKey) ?? ''
+}
+
+export function saveLiveInfoKey(key: string) {
+  if (key) sessionStorage.setItem(liveInfoStorageKey, key)
+  else sessionStorage.removeItem(liveInfoStorageKey)
+}
+
+export async function validateLiveInfoKey(key: string): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch(`${liveInfoRoot}/models`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(20_000),
+    })
+  } catch {
+    throw new Error('Live info could not be reached from this browser.')
+  }
+  if (response.ok) return
+  if (response.status === 401 || response.status === 403)
+    throw new Error('Live info rejected this key.')
+  if (response.status === 429) throw new Error('Live info is busy. Try again shortly.')
+  throw new Error(`Live info could not check this key (${response.status}).`)
+}
+
+function currentIndiaTime(): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(new Date())
+}
+
+export async function sendVerifiedLiveChat(
+  key: string,
+  messages: ChatTurn[],
+  onText: (text: string) => void,
+  signal: AbortSignal,
+): Promise<string> {
+  let response: Response
+  try {
+    response = await fetch(`${liveInfoRoot}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai/gpt-oss-20b',
+        messages: [
+          {
+            role: 'system',
+            content: `You are Sylc's live information verifier. The current time in India is ${currentIndiaTime()}. You MUST use browser search before every answer. Verify the answer against current sources before responding. When the user asks about the day or date, use the supplied current time and verify it. If current sources are unavailable or conflict, say that instead of guessing. Do not mention internal tools.`,
+          },
+          ...messages,
+        ],
+        tools: [{ type: 'browser_search' }],
+        tool_choice: 'required',
+        stream: false,
+      }),
+      signal,
+    })
+  } catch (caught) {
+    if (signal.aborted) throw caught
+    throw new Error('Live info could not be reached from this browser.')
+  }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403)
+      throw new Error('Live info rejected this key.')
+    if (response.status === 429) throw new Error('Live info is busy. Try again shortly.')
+    throw new Error(`Live info could not verify this reply (${response.status}).`)
+  }
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>
+  }
+  const content = payload.choices?.[0]?.message?.content
+  const answer =
+    typeof content === 'string'
+      ? content.trim()
+      : Array.isArray(content)
+        ? content.map((part) => part.text ?? '').join('').trim()
+        : ''
+  if (!answer) throw new Error('Live info returned no verified answer.')
+  onText(answer)
+  return answer
 }
 
 function errorFor(provider: Provider, status: number): Error {
