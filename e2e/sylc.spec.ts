@@ -41,6 +41,7 @@ test('every reply uses forced browser search and a current India date', async ({
     expect(body.tools).toEqual([{ type: 'browser_search' }])
     expect(body.tool_choice).toBe('required')
     expect(body.messages[0].content).toContain('current time in India')
+    expect(body.messages[0].content).toContain('Only mention a date, day, or time when it is necessary')
     expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'What day is it?' })
     await route.fulfill({
       json: { choices: [{ message: { content: 'Sunday, September 27, 2026.' } }] },
