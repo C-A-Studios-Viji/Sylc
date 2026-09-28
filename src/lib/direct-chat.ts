@@ -66,6 +66,12 @@ function currentIndiaTime(): string {
   }).format(new Date())
 }
 
+function needsDateContext(text: string): boolean {
+  return /\b(date|day|today|tomorrow|yesterday|what time|time is it|current time|current date)\b/i.test(
+    text,
+  )
+}
+
 export async function sendVerifiedLiveChat(
   key: string,
   messages: ChatTurn[],
@@ -73,6 +79,10 @@ export async function sendVerifiedLiveChat(
   signal: AbortSignal,
 ): Promise<string> {
   let response: Response
+  const latestQuestion = messages.at(-1)?.content ?? ''
+  const dateContext = needsDateContext(latestQuestion)
+    ? ` The current time in India is ${currentIndiaTime()}. Use it only to answer the user's date or time question.`
+    : ''
   try {
     response = await fetch(`${liveInfoRoot}/chat/completions`, {
       method: 'POST',
@@ -82,7 +92,7 @@ export async function sendVerifiedLiveChat(
         messages: [
           {
             role: 'system',
-            content: `You are Sylc's live information verifier. The current time in India is ${currentIndiaTime()}. You MUST use browser search before every answer. Verify the answer against current sources before responding. When the user asks about the day or date, use the supplied current time and verify it. If current sources are unavailable or conflict, say that instead of guessing. Do not mention internal tools.`,
+            content: `You are Sylc's live information verifier. You MUST use browser search before every answer and verify the answer against current sources before responding. Only mention a date, day, or time when it is necessary to answer the user's request. Do not introduce, repeat, or volunteer the date or time in any other reply.${dateContext} If current sources are unavailable or conflict, say that instead of guessing. Do not mention internal tools.`,
           },
           ...messages,
         ],
